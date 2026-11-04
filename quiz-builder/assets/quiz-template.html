@@ -1,0 +1,210 @@
+<!DOCTYPE html><html lang=zh-CN><head>
+<meta charset=utf-8>
+<meta name=viewport content="width=device-width,initial-scale=1">
+<title>/*QUIZ_TITLE*/</title>
+<style>
+:root{--bd:#d8dee9;--c:#2f6fd0;--ok:#16a34a;--no:#dc2626;--mu:#6b7280;--bg:#f4f7fc}
+body{margin:0;padding:20px 12px;background:var(--bg);color:#16202e;font:16px/1.6 -apple-system,"Segoe UI","PingFang SC",sans-serif}
+.wrap{max-width:640px;margin:auto}
+h1{font-size:18px;margin:0 0 10px}
+.bar{height:5px;border-radius:9px;background:#dde3ee;overflow:hidden}
+.bar i{display:block;height:100%;width:0;background:var(--c);transition:.3s}
+.row{display:flex;justify-content:space-between;font-size:12.5px;color:var(--mu);margin:7px 0}
+.nav{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+.nav button{width:30px;height:30px;border-radius:8px;border:1px solid var(--bd);background:#fff;font:inherit;font-size:13px;cursor:pointer}
+.nav button.on{border-color:var(--c);box-shadow:0 0 0 2px rgba(47,111,208,.18)}
+.nav button.p{background:#e9f8ef;border-color:var(--ok)}
+.nav button.f{background:#fdecec;border-color:var(--no)}
+.nav button.s{background:#eef2fd;border-color:var(--c)}
+.card{background:#fff;border:1px solid var(--bd);border-radius:14px;padding:16px}
+.tag{display:inline-block;font-size:11.5px;color:var(--mu);border:1px solid var(--bd);border-radius:6px;padding:0 6px;margin-bottom:8px}
+.q{font-size:16.5px;margin:0 0 12px;font-weight:600}
+.opts{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.opt{display:flex;gap:9px;align-items:center;width:100%;text-align:left;font:inherit;cursor:pointer;padding:10px 12px;border:1px solid var(--bd);border-radius:11px;background:#fff}
+.opt:hover:not(:disabled){border-color:var(--c)}
+.opt:disabled{cursor:default;opacity:.75}
+.opt.sel{border-color:var(--c);background:#eef2fd;opacity:1}
+.opt.good{border-color:var(--ok);background:#e9f8ef;opacity:1}
+.opt.bad{border-color:var(--no);background:#fdecec;opacity:1}
+.key{flex:none;width:23px;height:23px;border-radius:7px;display:grid;place-items:center;font-size:12px;font-weight:700;background:#eef2f8}
+input,textarea{width:100%;font:inherit;padding:10px;border:1px solid var(--bd);border-radius:10px;box-sizing:border-box;background:#fff}
+textarea{min-height:88px;margin-top:4px}
+.fb{margin-top:12px;padding:10px 12px;border-radius:10px;font-size:14.5px;border-left:4px solid var(--c);background:#f2f6fd}
+.fb.good{border-color:var(--ok);background:#eefaf2}
+.fb.bad{border-color:var(--no);background:#fdf1f1}
+.fb p{margin:5px 0}
+.btns{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.b{border:1px solid var(--bd);background:#fff;color:#16202e;font:inherit;font-size:14px;padding:7px 13px;border-radius:10px;cursor:pointer}
+.b.pri{background:var(--c);border-color:var(--c);color:#fff}
+.b:disabled{opacity:.4;cursor:not-allowed}
+.warn{background:#fff4e5;border:1px solid #f0b96a;border-radius:10px;padding:9px 12px;font-size:13.5px;margin-bottom:10px}
+.err{background:#fdecec;border:1px solid var(--no);border-radius:10px;padding:9px 12px;font-size:13.5px;margin-bottom:10px}
+.foot{margin-top:12px;font-size:12.5px;color:var(--mu)}
+.foot textarea{font-size:12px;margin:6px 0;min-height:60px;display:none}
+.sum{display:grid;gap:6px;font-size:14px}
+.rv{list-style:none;padding:0;margin:8px 0;font-size:13.5px}
+.rv li{padding:7px 0;border-bottom:1px dashed var(--bd)}
+.b.mini{padding:3px 9px;font-size:12px}
+.ans{margin-top:6px;font-size:13px;background:#f6f8fc;border:1px solid var(--bd);border-radius:8px;padding:8px;line-height:1.55}
+</style></head><body>
+<div class=wrap>
+<h1>/*QUIZ_TITLE*/</h1>
+<div id=warn></div>
+<div class=bar><i id=pr></i></div>
+<div class=row><span id=qt></span><span id=sc></span></div>
+<div class=nav id=nav></div>
+<div class=card id=st></div>
+<div class=foot id=foot>
+ <button class=b id=io>进度备份</button>
+ <textarea id=ioa spellcheck=false></textarea>
+ <span id=io2 style=display:none>
+  <button class=b id=exp>生成</button><button class=b id=imp>导入上面文本</button>
+  <button class=b id=clr>清除记录</button>
+ </span>
+ <div id=note></div>
+</div>
+</div>
+<script>
+const Q=[
+/*QUIZ_DATA*/
+];
+const ty=o=>o.t||(o.ref?'essay':o.answers?'blank':Array.isArray(o.answer)?'multi':'choice');
+const LAB={choice:'单选',multi:'多选',blank:'填空',essay:'问答'};
+const norm=s=>(s==null?'':String(s)).trim().toLowerCase()
+  .replace(/[\uFF01-\uFF5E]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)).replace(/\s+/g,' ');
+function hsh(s){let h=5381;for(let i=0;i<s.length;i++)h=(h*33^s.charCodeAt(i))>>>0;return h.toString(36)}
+const KEY='mq2:'+document.title.slice(0,24)+':'+hsh(JSON.stringify(Q));
+let S={},store=true,cur=0,sel=[],draft={};
+try{S=JSON.parse(localStorage.getItem(KEY)||'{}')||{}}catch(e){S={};store=false}
+function save(){if(!store)return;try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){noStore('本地存储被禁用，关闭页面后进度不会保留，请用下方「进度备份」。')}}
+function warn(m){document.getElementById('warn').innerHTML='<div class=warn>'+m+'</div>'}
+function noStore(m){store=false;warn(m)}
+const isDone=i=>{const r=S[i];return !!(r&&r.v!==undefined)};
+const scoreOf=()=>Q.reduce((a,o,i)=>a+(S[i]&&S[i].ok===true?1:0),0);
+const doneN=()=>Q.reduce((a,o,i)=>a+(isDone(i)?1:0),0);
+function grade(o,v){const t=ty(o);
+ if(t=='blank')return (o.answers||[o.answer]).map(norm).indexOf(norm(v))>=0;
+ if(t=='multi'){const a=(o.answer||[]).slice().sort().join(','),b=(v||[]).slice().sort().join(',');return a==b}
+ if(t=='essay')return null;
+ return v===o.answer}
+function ansOf(o){const t=ty(o);
+ if(t=='blank')return (o.answers||[o.answer]).join(' / ');
+ if(t=='multi')return (o.answer||[]).map(j=>'ABCD'[j]).join(' + ');
+ if(t=='essay')return o.ref||'（这题没写参考答案）';
+ return o.opts&&o.opts[o.answer]!==undefined?o.opts[o.answer]:'ABCD'[o.answer]}
+const BAD={};
+Q.forEach(function(o,i){const t=ty(o),add=m=>{BAD[i]=BAD[i]?BAD[i]+'；'+m:m};
+ if(!o.q)add('缺题干 q');
+ if(t=='choice'||t=='multi'){
+  if(!Array.isArray(o.opts)||o.opts.length<2)add('opts 需至少 2 个');
+  else{
+   if(t=='choice'&&(!Number.isInteger(o.answer)||!o.opts[o.answer]))add('answer 需是 0 起且在选项内');
+   if(t=='multi'&&!Array.isArray(o.answer))add('multi 的 answer 需是数组，如 [0,2]');
+   if(t=='multi'&&Array.isArray(o.answer)&&o.answer.some(x=>!Number.isInteger(x)||x<0||x>=o.opts.length))add('multi answer 下标越界');
+  }
+ }
+ if(t=='blank'&&!o.answers&&typeof o.answer!='string')add('填空需要 answers 数组或 answer 字符串');
+ if(t=='essay'&&!o.ref)add('问答需要 ref 参考答案');
+ if(t=='essay'&&o.points&&!Array.isArray(o.points))add('points 需是数组');
+});
+const badn=Object.keys(BAD);
+if(badn.length)document.getElementById('warn').innerHTML='<div class=err><b>题库有 '+badn.length+' 处问题，这些题只显示错误不参判分：</b><br>'+
+  badn.map(i=>'第'+(+i+1)+'题：'+BAD[i]).join('<br>')+'</div>';
+const usable=Q.map((o,i)=>i).filter(i=>!BAD[i]);
+function nav(){
+ document.getElementById('nav').innerHTML=Q.map((o,i)=>
+  '<button data-n='+i+' class="'+(i==cur?'on ':'')+(isDone(i)?(ty(o)=='essay'?'s':(S[i].ok?'p':'f')):'')+'">'+(i+1)+'</button>').join('');
+ document.querySelectorAll('[data-n]').forEach(b=>b.onclick=()=>{cur=+b.dataset.n;draw()});
+ document.getElementById('pr').style.width=(doneN()/Q.length*100)+'%';
+ document.getElementById('qt').textContent='已作答 '+doneN()+' / '+Q.length;
+ document.getElementById('sc').textContent='答对 '+scoreOf()+' 题';
+}
+function draw(){
+ const o=Q[cur];if(!o){st.innerHTML='<p>没有可用的题目，检查题库数据是否替换成功。</p>';return}
+ if(BAD[cur]){nav();st.innerHTML='<span class=tag>数据有误</span><div class=err>第'+(cur+1)+'题：'+BAD[cur]+'</div><div class=btns>'+
+  '<button class=b data-mv=-1 '+(cur==0?'disabled':'')+'>上一题</button><button class=b data-mv=1 '+(cur>=Q.length-1?'disabled':'')+'>下一题</button></div>';
+  const mv=s=>st.querySelectorAll(s).forEach(b=>b.onclick=function(){cur+=+this.dataset.mv;draw()});mv('[data-mv]');return}
+ const t=ty(o),r=S[cur]||{};
+ sel=draft[cur]?draft[cur].slice():(Array.isArray(r.v)?r.v.slice():[]);
+ let h='<span class=tag>'+LAB[t]+' · 第'+(cur+1)+'/'+Q.length+' 题'+(r.redo?' · 已重做'+r.redo+'次':'')+'</span><p class=q>'+o.q+'</p>';
+ if(t=='choice'||t=='multi'){
+  h+='<ul class=opts>'+o.opts.map((x,j)=>{
+   let c='opt';
+   if(r.ok!==undefined){if(j==o.answer||(Array.isArray(o.answer)&&o.answer.indexOf(j)>=0))c+=' good';else if(sel.indexOf(j)>=0||j==r.v)c+=' bad'}
+   else if(sel.indexOf(j)>=0)c+=' sel';
+   return '<li><button class="'+c+'" data-o='+j+' '+(r.ok!==undefined?'disabled':'')+'><span class=key>'+'ABCD'[j]+'</span><span>'+x+'</span></button></li>'}).join('')+'</ul>';
+  if(t=='multi'&&r.ok===undefined)h+='<div class=btns><button class="b pri" data-sub=1>提交多选</button></div>';
+ } else if(t=='blank'){
+  h+=r.ok===undefined?'<input id=in placeholder="填写答案后回车或点提交" value="'+String(r.v||'').split('"').join('&quot;')+'"><div class=btns><button class="b pri" data-sub=1>提交</button></div>'
+   :'<p><code>'+String(r.v)+'</code></p>';
+ } else {
+  h+='<textarea id=in placeholder="写下你的回答，提交后对照参考答案自评">'+(r.v||'')+'</textarea>';
+  if(r.v===undefined)h+='<div class=btns><button class="b pri" data-sub=1>提交并看参考答案</button></div>';
+ }
+ if(r.ok===true)h+='<div class="fb good"><b>✔ 正确</b>'+(o.explain?'<p>'+o.explain+'</p>':'')+'</div>';
+ if(r.ok===false){
+  let right=ansOf(o);
+  h+='<div class="fb bad"><b>✘ 不正确，正确答案：'+right+'</b>'+(o.explain?'<p>'+o.explain+'</p>':'')+'</div>';
+ }
+ if(t=='essay'&&r.v!==undefined){
+  let hit='';
+  if(o.points&&o.points.length){const v=norm(r.v);const on=o.points.filter(p=>v.indexOf(norm(p))>=0);
+   hit='<p>关键词命中 '+on.length+'/'+o.points.length+(on.length?'：'+on.join('、'):'')+'</p>'}
+  h+='<div class="fb"><b>参考答案</b><p>'+o.ref+'</p>'+hit+
+   '<p>你的回答：<code>'+String(r.v||'（空）')+'</code></p>'+
+   '<div class=btns>'+[['ok','掌握了'],['vague','模糊'],['no','不会']].map(x=>
+    '<button class="b'+(r.self==x[0]?' pri':'')+'" data-self="'+x[0]+'">'+x[1]+'</button>').join('')+'</div></div>';
+ }
+ h+='<div class=btns>'+(r.ok!==undefined||r.v!==undefined?'<button class=b data-re=1>重做本题</button>':'')+
+  '<button class=b data-mv=-1 '+(cur==0?'disabled':'')+'>上一题</button>'+
+  '<button class=b data-mv=1 '+(cur>=Q.length-1?'disabled':'')+'>下一题</button>'+
+  '<button class=b data-res=1>看结果</button></div>';
+ st.innerHTML=h;
+ const bind=(s,f)=>st.querySelectorAll(s).forEach(b=>b.onclick=f);
+ bind('[data-o]',function(){const j=+this.dataset.o;
+  if(t=='choice'){S[cur]={v:j,ok:grade(o,j),redo:(r.redo||0)};save();draw()}
+  else{sel.indexOf(j)>=0?sel.splice(sel.indexOf(j),1):sel.push(j);draft[cur]=sel.slice();draw()}});
+ bind('[data-sub]',function(){
+  if(t=='multi'){if(!sel.length)return;S[cur]={v:sel.slice(),ok:grade(o,sel),redo:(r.redo||0)};delete draft[cur]}
+  else{const v=document.getElementById('in').value;
+   if(t=='blank'){if(!v.trim())return;S[cur]={v:v,ok:grade(o,v),redo:(r.redo||0)}}
+   else{S[cur]={v:v,redo:(r.redo||0)}}}
+  save();draw()});
+ bind('[data-self]',function(){S[cur].self=this.dataset.self;save();draw()});
+ bind('[data-re]',function(){S[cur]={redo:((S[cur]||{}).redo||0)+1};delete draft[cur];save();draw()});
+ bind('[data-mv]',function(){cur+=+this.dataset.mv;draw()});
+ bind('[data-res]',result);
+ nav();
+}
+function result(){
+ const wrong=usable.filter(i=>{const r=S[i];return r&&(r.ok===false||r.self=='no'||r.self=='vague')});
+ const selfN=Q.reduce((a,o,i)=>a+(S[i]&&S[i].self=='ok'?1:0),0);
+ st.innerHTML='<p class=q>结果</p><div class=sum><span>客观题答对 '+scoreOf()+' / '+
+  Q.filter(o=>ty(o)!='essay').length+' 题，问答自评掌握 '+selfN+' / '+Q.filter(o=>ty(o)=='essay').length+' 题</span>'+
+  '<span>已作答 '+doneN()+' / '+Q.length+'，共重做 '+Q.reduce((a,o,i)=>a+((S[i]||{}).redo||0),0)+' 次</span></div>'+
+  '<ul class=rv>'+Q.map((o,i)=>{const r=S[i]||{},t=ty(o);
+   return '<li>'+(t=='essay'?(r.self=='ok'?'✔':r.v!==undefined?'△':'–'):(r.ok===true?'✔':r.ok===false?'✘':'–'))+
+    ' 第'+(i+1)+'题 '+LAB[t]+' '+(r.v!==undefined&&r.v!==''?'<span style=color:#6b7280>你答：'+(Array.isArray(r.v)?r.v.map(j=>'ABCD'[j]).join('+'):String(r.v).slice(0,28))+'</span>':'未作答')+
+    ' <button class="b mini" data-ans='+i+'>答案</button>'+
+    '<div class=ans id=a'+i+' hidden><b>答案：</b>'+ansOf(o)+(o.explain?'<br><b>解析：</b>'+o.explain:'')+'</div></li>'}).join('')+'</ul>'+
+  '<div class=btns>'+(wrong.length?'<button class="b pri" data-w=1>只重做错题（'+wrong.length+'）</button>':'')+
+  '<button class=b data-all=1>全部重做</button><button class=b data-back=1>返回题目</button></div>';
+ st.querySelector('[data-back]').onclick=draw;
+ st.querySelectorAll('[data-ans]').forEach(b=>b.onclick=function(){const d=document.getElementById('a'+this.dataset.ans);d.hidden=!d.hidden});
+ st.querySelector('[data-all]').onclick=function(){const k=Q.map((o,i)=>i);S={};draft={};k.forEach(i=>S[i]={redo:1});save();cur=0;draw()};
+ const w=st.querySelector('[data-w]');if(w)w.onclick=function(){wrong.forEach(i=>{S[i]={redo:((S[i]||{}).redo||0)+1};delete draft[i]});save();cur=wrong[0];draw()};
+ nav();
+}
+const ioa=document.getElementById('ioa');
+document.getElementById('io').onclick=function(){
+ ioa.style.display=ioa.style.display=='block'?'none':'block';
+ document.getElementById('io2').style.display=ioa.style.display=='block'?'inline':'none'};
+document.getElementById('exp').onclick=function(){
+ try{ioa.value=btoa(unescape(encodeURIComponent(JSON.stringify(S))))}catch(e){ioa.value=JSON.stringify(S)}};
+document.getElementById('imp').onclick=function(){
+ try{S=JSON.parse(decodeURIComponent(escape(atob(ioa.value.trim()))));save();draw()}catch(e){warn('导入失败，文本不是本页面导出的进度。')}};
+document.getElementById('clr').onclick=function(){S={};try{localStorage.removeItem(KEY)}catch(e){};draw()};
+if(!store)warn('本地存储不可用，关闭页面后进度不会保留，可用下方「进度备份」导出文本。');
+draw();
+</script>
+</body></html>
