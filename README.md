@@ -2,9 +2,9 @@
 
 [中文文档](README.zh-CN.md)
 
-Agent Skills that turn any topic into a **playable quiz** or a **Mermaid diagram**, delivered
-inline in the chat. The quiz is a single self-contained HTML file: no workspace, no build step,
-no network, and your answers survive closing the page.
+Agent Skills that turn any topic into a **playable quiz**, a **Mermaid diagram**, or an
+**HTML flowchart**, delivered inline in the chat. The quiz is a single self-contained HTML file:
+no workspace, no build step, no network, and your answers survive closing the page.
 
 ![Preview](docs/preview.png)
 <!-- replace this path with your own screenshot -->
@@ -16,6 +16,7 @@ no network, and your answers survive closing the page.
 | [`quiz-builder`](quiz-builder) | Questions → interactive HTML quiz | Ships the real template, output is **byte reproducible** and safe on weaker models |
 | [`quiz-spec-builder`](quiz-spec-builder) | Questions → interactive HTML quiz | **Spec only**, no template file, the model writes the page from a behaviour contract. Cheaper on tokens, less reproducible |
 | [`mermaid-diagram`](mermaid-diagram) | Flowchart, sequence, architecture, state, swimlane, Gantt, ER, class | Single-file rules, emits a `mermaid` block inline |
+| [`html-flowchart`](html-flowchart) | Flowcharts as HTML, laid out for a phone screen | ~10 line rule file, no template, no JS. Emits one self-contained `html` block |
 
 ### Question types
 
@@ -48,6 +49,7 @@ git clone https://github.com/chfabfu/quiz-skills.git
 cp -r quiz-skills/quiz-builder      ~/.claude/skills/
 cp -r quiz-skills/quiz-spec-builder ~/.claude/skills/
 cp -r quiz-skills/mermaid-diagram   ~/.claude/skills/
+cp -r quiz-skills/html-flowchart    ~/.claude/skills/
 
 # or project level: put them in .claude/skills/ inside your repo
 ```
@@ -81,14 +83,17 @@ make 5 multiple choice questions about HTTP status codes, clickable and auto gra
 use the spec version, 5 questions on STM32 registers
 ```
 
-Diagram requests only match `mermaid-diagram`. Quiz requests match whichever quiz skill you
-picked:
+Quiz requests match whichever quiz skill you picked. Flowcharts are now claimed by
+`html-flowchart`, every other diagram type stays with `mermaid-diagram`:
 
 | Your situation | Use |
 | --- | --- |
 | Ordinary model, output must be consistent, you want to hand the same file to someone | `quiz-builder` |
 | Strong model, you care about token cost, one shot per conversation | `quiz-spec-builder` |
-| Both enabled | say "spec version" explicitly to hit `quiz-spec-builder`, otherwise `quiz-builder` wins |
+| Both quiz skills enabled | say "spec version" explicitly to hit `quiz-spec-builder`, otherwise `quiz-builder` wins |
+| You read diagrams on a phone | `html-flowchart`, one `html` block you can open in the browser |
+| Sequence / architecture / state / swimlane / Gantt / ER / class | `mermaid-diagram`, it is the only one with those rules |
+| Both diagram skills enabled and you just say "flowchart" | whichever `description` matches first wins. Enable one of the two if you want it deterministic |
 
 ### Measured cost
 
@@ -99,13 +104,15 @@ Tokens per quiz turn, excluding your conversation history, estimated from charac
 | `quiz-builder` | 1425 + 1254 + 4498 | ≈4750 | **≈11.9k** |
 | `quiz-spec-builder` | 2395 | ≈5000-6500 | **≈7.4-8.9k** |
 | `mermaid-diagram` | 1407 | diagram size | **≈1.4k+** |
+| `html-flowchart` | 776 | one HTML block | **≈0.8k+** |
 
-`quiz-builder` pays to read a 4.5k template and echo it back. `quiz-spec-builder` skips the read
-and rewrites the engine every time, which is cheaper but model dependent, and two quizzes may
-differ slightly in behaviour.
+`quiz-builder` pays to read a 4.5k template and echo it back. `quiz-spec-builder` skips the read and
+rewrites the engine every time, which is cheaper but model dependent, and two quizzes may
+differ slightly in behaviour. `html-flowchart` deliberately carries no template at all: the rule is
+the whole skill, so it is the cheapest thing in this repo to trigger.
 
-Only `name` and `description` stay resident in context, about 640 tokens for all three skills
-combined. The body loads only when a request matches.
+Only `name` and `description` stay resident in context, about 640 tokens for the three original
+skills plus ~0.25k for `html-flowchart`. The body loads only when a request matches.
 
 ## Question data format
 
@@ -132,6 +139,10 @@ because the stored value is compared against what the user types and an entity n
   flags them to rewrite or skip.
 - The preview panel is a sandbox. `localStorage` may be blocked (the page warns and you fall back
   to export/import), it can be narrower than 640px, and `prefers-color-scheme` may be ignored.
+- `html-flowchart` and `mermaid-diagram` both match "flowchart / 流程图". They are alternatives, not
+  a pipeline. `html-flowchart` draws stacked boxes with `↓` between them, so a loop back across
+  several rows is labelled with step numbers ("回到 ②") instead of routed as a real connector line.
+  If you want routed arrows and swimlane dividers, you want a diagram engine, not this skill.
 
 ## Layout
 
@@ -143,8 +154,10 @@ quiz-skills/
 │   └── references/authoring.md        question authoring rules
 ├── quiz-spec-builder/
 │   └── SKILL.md                       behaviour contract + pitfalls list
-└── mermaid-diagram/
-    └── SKILL.md                       diagram rules and render failures
+├── mermaid-diagram/
+│   └── SKILL.md                       diagram rules and render failures
+└── html-flowchart/
+    └── SKILL.md                       use HTML for flowcharts, phone first
 ```
 
 No README inside the skill folders, that is against the Agent Skills guidance, documentation
