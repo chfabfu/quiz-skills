@@ -15,7 +15,8 @@ no workspace, no build step, no network, and your answers survive closing the pa
 | --- | --- | --- |
 | [`quiz-builder`](quiz-builder) | Questions → interactive HTML quiz | Ships the real template, output is **byte reproducible** and safe on weaker models |
 | [`quiz-spec-builder`](quiz-spec-builder) | Questions → interactive HTML quiz | **Spec only**, no template file, the model writes the page from a behaviour contract. Cheaper on tokens, less reproducible |
-| [`mermaid-diagram`](mermaid-diagram) | Flowchart, sequence, architecture, state, swimlane, Gantt, ER, class | Single-file rules, emits a `mermaid` block inline |
+| [`mermaid-diagram`](mermaid-diagram) | Flowchart, sequence, architecture, state, swimlane, Gantt, ER, class | **Full rulebook**, eight sections of caps, a render-failure triage list and a pre-delivery checklist. Emits a `mermaid` block inline |
+| [`mermaid`](mermaid) | The same diagrams over the same channel | **Declaration only**, about 50 lines. States the channel and the phone render target, carries three layout facts and nothing else. Written for a strong model |
 | [`html-flowchart`](html-flowchart) | Flowcharts as HTML, laid out for a phone screen | ~10 line rule file, no template, no JS. Emits one self-contained `html` block |
 
 ### Question types
@@ -49,6 +50,7 @@ git clone https://github.com/chfabfu/quiz-skills.git
 cp -r quiz-skills/quiz-builder      ~/.claude/skills/
 cp -r quiz-skills/quiz-spec-builder ~/.claude/skills/
 cp -r quiz-skills/mermaid-diagram   ~/.claude/skills/
+cp -r quiz-skills/mermaid           ~/.claude/skills/
 cp -r quiz-skills/html-flowchart    ~/.claude/skills/
 
 # or project level: put them in .claude/skills/ inside your repo
@@ -83,17 +85,18 @@ make 5 multiple choice questions about HTTP status codes, clickable and auto gra
 use the spec version, 5 questions on STM32 registers
 ```
 
-Quiz requests match whichever quiz skill you picked. Flowcharts are now claimed by
-`html-flowchart`, every other diagram type stays with `mermaid-diagram`:
+Quiz requests match whichever quiz skill you picked. Three skills answer diagram requests, and
+they are alternatives rather than a pipeline, enable the one you want:
 
 | Your situation | Use |
 | --- | --- |
 | Ordinary model, output must be consistent, you want to hand the same file to someone | `quiz-builder` |
 | Strong model, you care about token cost, one shot per conversation | `quiz-spec-builder` |
 | Both quiz skills enabled | say "spec version" explicitly to hit `quiz-spec-builder`, otherwise `quiz-builder` wins |
-| You read diagrams on a phone | `html-flowchart`, one `html` block you can open in the browser |
-| Sequence / architecture / state / swimlane / Gantt / ER / class | `mermaid-diagram`, it is the only one with those rules |
-| Both diagram skills enabled and you just say "flowchart" | whichever `description` matches first wins. Enable one of the two if you want it deterministic |
+| You read diagrams on a phone and want a file you control | `html-flowchart`, one `html` block you can open in the browser |
+| You want Mermaid, the model is strong, cost matters | `mermaid`, declaration only, about 1.1k tokens to load |
+| You want Mermaid held to a line, or a diagram came back clipped and you need the diagnosis | `mermaid-diagram`, it has the caps, the triage list and the other diagram types |
+| More than one diagram skill enabled and you just say "flowchart" | whichever `description` matches first wins. Enable one if you want it deterministic |
 
 ### Measured cost
 
@@ -103,7 +106,8 @@ Tokens per quiz turn, excluding your conversation history, estimated from charac
 | --- | --- | --- | --- |
 | `quiz-builder` | 1425 + 1254 + 4498 | ≈4750 | **≈11.9k** |
 | `quiz-spec-builder` | 2395 | ≈5000-6500 | **≈7.4-8.9k** |
-| `mermaid-diagram` | 1407 | diagram size | **≈1.4k+** |
+| `mermaid-diagram` | ≈2250 | diagram size | **≈2.3k+** |
+| `mermaid` | ≈1140 | diagram size | **≈1.1k+** |
 | `html-flowchart` | 776 | one HTML block | **≈0.8k+** |
 
 `quiz-builder` pays to read a 4.5k template and echo it back. `quiz-spec-builder` skips the read and
@@ -111,8 +115,17 @@ rewrites the engine every time, which is cheaper but model dependent, and two qu
 differ slightly in behaviour. `html-flowchart` deliberately carries no template at all: the rule is
 the whole skill, so it is the cheapest thing in this repo to trigger.
 
+The two Mermaid rows are counted as English at about four characters a token and Chinese at about
+1.1 tokens a character, which is why `mermaid` costs more than its 3.4KB suggests and still lands
+at roughly half of `mermaid-diagram`. It keeps the facts, Mermaid breaks text only at spaces so
+CJK labels need hand placed `<br/>`, width rather than node count is what ruins a phone, labels
+holding `<` `>` `&` `~` get eaten, and the four non fixes. It drops the caps, the probe, the syntax
+crib and the triage table, so the pacing is left to the model.
+
 Only `name` and `description` stay resident in context, about 640 tokens for the three original
-skills plus ~0.25k for `html-flowchart`. The body loads only when a request matches.
+skills, ~0.25k more for `html-flowchart`, ~0.5k more for `mermaid` whose description is Chinese,
+and ~0.1k more for the bilingual trigger list now on `mermaid-diagram`. The body loads only when a
+request matches.
 
 ## Question data format
 
@@ -139,10 +152,15 @@ because the stored value is compared against what the user types and an entity n
   flags them to rewrite or skip.
 - The preview panel is a sandbox. `localStorage` may be blocked (the page warns and you fall back
   to export/import), it can be narrower than 640px, and `prefers-color-scheme` may be ignored.
-- `html-flowchart` and `mermaid-diagram` both match "flowchart / 流程图". They are alternatives, not
-  a pipeline. `html-flowchart` draws stacked boxes with `↓` between them, so a loop back across
-  several rows is labelled with step numbers ("回到 ②") instead of routed as a real connector line.
-  If you want routed arrows and swimlane dividers, you want a diagram engine, not this skill.
+- `mermaid` and `mermaid-diagram` overlap on purpose, one declares the channel and the other
+  enforces it. Enable one. `mermaid-diagram` is the safer pick on a weak model or while debugging
+  a lost label tail, `mermaid` is the cheaper pick when the model can be trusted to pace itself.
+  Neither one is a rendering preview, the layout of a diagram is never verified before you see it.
+- `html-flowchart`, `mermaid` and `mermaid-diagram` all match "flowchart / 流程图". They are
+  alternatives, not a pipeline. `html-flowchart` draws stacked boxes with `↓` between them, so a
+  loop back across several rows is labelled with step numbers ("回到 ②") instead of routed as a real
+  connector line. If you want routed arrows and swimlane dividers, you want a diagram engine, not
+  this skill.
 
 ## Layout
 
@@ -156,6 +174,8 @@ quiz-skills/
 │   └── SKILL.md                       behaviour contract + pitfalls list
 ├── mermaid-diagram/
 │   └── SKILL.md                       diagram rules and render failures
+├── mermaid/
+│   └── SKILL.md                       declaration only, diagram requests go to Mermaid
 └── html-flowchart/
     └── SKILL.md                       use HTML for flowcharts, phone first
 ```
